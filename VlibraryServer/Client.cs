@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Threading;
+using System.CodeDom.Compiler;
 
 
 namespace VlibraryServer
@@ -24,6 +25,7 @@ namespace VlibraryServer
 
         private static Dictionary<string, TimeObj> BlockedUsers = new Dictionary<string, TimeObj>();
         private static List<string> Libraries = new List<string>() { "Givataim", "Tel Aviv", "Ramat Gan", "Yavne", "Jerusalem", "Bat Yam"};
+        private static List<string> Genres = new List<string>() { "Horror", "Fantasy", "Fiction", "Biogrpahy", "History", "Drama", "Mystery", "Cooking", "Self Help", "Travel", "Comedy", "Kids" };
 
 
         // information about the client
@@ -51,6 +53,8 @@ namespace VlibraryServer
         //Capthca
         private string CaptchaAnswer;
 
+        private string OverlapString;
+
 
         // the nickname being sent
         /// <summary>
@@ -72,6 +76,7 @@ namespace VlibraryServer
 
             // Add the new client to our clients collection
             AllClients.Add(_clientIP, this);
+            Console.WriteLine(AllClients.Count);
 
 
             if (BlockedUsers.ContainsKey(_clientIP))
@@ -131,8 +136,16 @@ namespace VlibraryServer
                     message = AES.Encrypt(message, Key, IV);
                 }
 
-                byte[] bytesToSend = System.Text.Encoding.ASCII.GetBytes(message);
-                ns.Write(bytesToSend, 0, bytesToSend.Length);
+                byte[] bytesToSend = System.Text.Encoding.ASCII.GetBytes(message + "!");
+                int chunkSize = 60000; // Chunk size in bytes
+                int bytesSent = 0;
+                while (bytesSent < bytesToSend.Length)
+                {
+                    int remainingBytes = bytesToSend.Length - bytesSent;
+                    int currentChunkSize = Math.Min(remainingBytes, chunkSize);
+                    ns.Write(bytesToSend, bytesSent, currentChunkSize);
+                    bytesSent += currentChunkSize;
+                }
                 ns.Flush();
             }
             catch (Exception ex)
@@ -166,7 +179,17 @@ namespace VlibraryServer
                 else // client still connected
                 {
                     string messageReceived = System.Text.Encoding.ASCII.GetString(data, 0, bytesRead);
-                    //if the client is sending its nickname
+                    if(messageReceived.EndsWith("!"))
+                    {
+                        messageReceived = messageReceived.Remove(messageReceived.Length - 1);
+                        messageReceived = OverlapString + messageReceived;
+                        OverlapString = "";
+                    }
+                    else
+                    {
+                        OverlapString += messageReceived;
+                    }
+
                     if (messageReceived.StartsWith("public key:"))
                     {
                         messageReceived = messageReceived.Remove(0, 11);
@@ -178,7 +201,7 @@ namespace VlibraryServer
                         SendMessage("$" + EncryptedSymmerticKey);
 
                     }
-                    else
+                    else if(OverlapString == "")
                     {
                         byte[] Key = Encoding.UTF8.GetBytes(SymmetricKey);
                         byte[] IV = new byte[16];
@@ -186,12 +209,15 @@ namespace VlibraryServer
                     }
                     if (messageReceived.StartsWith("In")) //tries to sign in.
                     {
-                        user = messageReceived.Substring(2, messageReceived.IndexOf('#', 2) - 2);
+                        string userTriesToLog = messageReceived.Substring(2, messageReceived.IndexOf('#', 2) - 2);
                         BlockedUsers[_clientIP].AddTry();
-                        if (DataHandler.isExist(messageReceived.Remove(0, 2)))
+                        if (DataHandler.isExist(messageReceived.Remove(0, 2))) //succescful login.
                         {
+                            user = userTriesToLog; //saves the username.
                             SendMessage("In The Database");
-                            logged = true;
+                            mail = DataHandler.GetEmailAddress(user); //saves the user's mail.
+                            SendCodeFromOutlook(mail);
+
                             BlockedUsers[_clientIP].SetLoginTries(0);
                         }
                         else
@@ -241,40 +267,21 @@ namespace VlibraryServer
                         password = details[1];
                         mail = details[2];
                         SendCodeFromOutlook(mail);
-
                     }
 
-                    if (messageReceived.StartsWith("Code")) //tries to pass the smtp test.
+                    if (messageReceived.StartsWith("CodeUp") && SmtpCode.Equals(messageReceived.Remove(0, 6)) && !logged) //tries to pass the smtp test.
                     {
-
-                        if (SmtpCode.Equals(messageReceived.Remove(0, 4)) && !logged)
+                        //captcha test
+                        string[] Captcha = CaptchaTest();
+                        if (Captcha.Length == 2) //to ensure out of range exception
                         {
-                            //captcha test
-                            string[] Captcha = CaptchaTest();
-                            if (Captcha.Length == 2) //to ensure out of range exception
-                            {
-                                SendMessage("capt:" + Captcha[0]);
-                                CaptchaAnswer = Captcha[1];
-                            }
-                        }
-                        if (messageReceived.StartsWith("CodeForNewPass"))
-                        {
-                            if (SmtpCode.Equals(messageReceived.Remove(0, 14)))
-                            {
-                                SendMessage("Valid Code");
-                            }
-                        }
-                        if (messageReceived.StartsWith("CodeForSettings"))
-                        {
-                            if (SmtpCode.Equals(messageReceived.Remove(0, 15)))
-                            {
-                                SendMessage("Valid Code For Settings");
-                            }
+                            SendMessage("captUp:" + Captcha[0]);
+                            CaptchaAnswer = Captcha[1];
                         }
                     }
-                    if (messageReceived.StartsWith("Captcha:")) //for captcha answer
+                    if (messageReceived.StartsWith("CaptchaUp:")) //for captcha answer in sign up
                     {
-                        if (messageReceived.Remove(0, 8) == CaptchaAnswer)
+                        if (messageReceived.Remove(0, 10) == CaptchaAnswer)
                         {
                             DataHandler.InsertUser(userDetails);
                             SendMessage("Signed Up");
@@ -284,11 +291,48 @@ namespace VlibraryServer
                             string[] Captcha = CaptchaTest();
                             if (Captcha.Length == 2) //to ensure out of range exception
                             {
-                                SendMessage("capt:" + Captcha[0]);
+                                SendMessage("captUp:" + Captcha[0]);
                                 CaptchaAnswer = Captcha[1];
                             }
                         }
                     }
+                    if (messageReceived.StartsWith("CodeIn") && SmtpCode.Equals(messageReceived.Remove(0, 6)) && !logged) //tries to pass the smtp test.
+                    {
+                        //captcha test
+                        string[] Captcha = CaptchaTest();
+                        if (Captcha.Length == 2) //to ensure out of range exception
+                        {
+                            SendMessage("captIn:" + Captcha[0]);
+                            CaptchaAnswer = Captcha[1];
+                        }
+                    }
+                    if (messageReceived.StartsWith("CaptchaIn:")) //for captcha answer in sign up
+                    {
+                        if (messageReceived.Remove(0, 10) == CaptchaAnswer)
+                        {
+                            SendMessage("Signed In");
+                            logged = true;
+                        }
+                        else
+                        {
+                            string[] Captcha = CaptchaTest();
+                            if (Captcha.Length == 2) //to ensure out of range exception
+                            {
+                                SendMessage("captIn:" + Captcha[0]);
+                                CaptchaAnswer = Captcha[1];
+                            }
+                        }
+                    }
+
+
+
+                    if (messageReceived.StartsWith("CodeForNewPass") && SmtpCode.Equals(messageReceived.Remove(0, 14)))
+                    {
+                            SendMessage("Valid Code");
+                    }
+                    
+
+                    
 
                     if (messageReceived.StartsWith("Send Code")) // send code to mail.
                     {
@@ -296,18 +340,35 @@ namespace VlibraryServer
                         SendCodeFromOutlook(mail);
                     }
 
+                    if (messageReceived.StartsWith("SendCodeSettings")) // send code to mail.
+                    {
+                        string mail = DataHandler.GetEmailAddress(messageReceived.Remove(0,16));
+                        SendCodeFromOutlook(mail);
+                    }
+                    if (messageReceived.StartsWith("CodeForSettings") && SmtpCode.Equals(messageReceived.Remove(0, 15)))
+                    {
+                        SendMessage("Valid Code For Settings");
+                    }
+
+
                     if (messageReceived.StartsWith("ChangePassMail")) // user passed the smtp test, tries to change password in forgot password form.
                     {
                         DataHandler.UpdatePassword(mail, messageReceived.Remove(0, 14));
                     }
+
                     if (messageReceived.StartsWith("ChangePassUser")) // user passed the smtp test, tries to change password in settings form.
                     {
-                        DataHandler.UpdatePasswordViaUser(user, messageReceived.Remove(0, 14));
+                        DataHandler.UpdatePassword(mail, messageReceived.Remove(0, 14));
                     }
                     if (messageReceived.StartsWith("ChangeMail"))
                     {
                         DataHandler.UpdateMail(user, messageReceived.Remove(0, 9));
                     }
+                    if (messageReceived.StartsWith("NewUsername:"))
+                    {
+                        DataHandler.UpdateUsername(mail, messageReceived = messageReceived.Remove(0, 12));
+                    }
+
 
                     if (messageReceived.StartsWith("What Type"))
                     {
@@ -320,36 +381,104 @@ namespace VlibraryServer
                     {
                         SendMessage("UserName:" + user);
                     }
-                    if(messageReceived == "GetLibraries")
+                    if (messageReceived == "GetLibraries")
                     {
                         SendMessage("lb:" + string.Join(",", Libraries));
                     }
-                    if(messageReceived.StartsWith("NewUsername:"))
-                    {
-                        messageReceived = messageReceived.Remove(0, 12);
-                        string[] strings = messageReceived.Split('+');
-                        DataHandler.UpdateUsername(strings[1], strings[0]);
-                    }
+                    
 
-                    if(messageReceived.StartsWith("BookInsert:"))
+                    if (messageReceived.StartsWith("BookInsert:"))
                     {
                         messageReceived = messageReceived.Remove(0, 11);
                         DataHandler.InsertBook(messageReceived);
                     }
 
-                    if(messageReceived.StartsWith("GetBooks:"))
+                    if (messageReceived.StartsWith("GetBooks:"))
                     {
-                        string bookName = messageReceived.Remove(0, 9);
-                        string Author = DataHandler.GetBooksAuthor(bookName);
-                        string Genre = DataHandler.GetBooksGenre(bookName);
-                        string Rate = DataHandler.GetBooksRating(bookName);
-                        SendMessage("BooksToPreview" + bookName + "," + Author + "," + Genre + "," + Rate);
+                        SendMessage("BooksToPreview:" + DataHandler.GetAll());
                     }
+                    if(messageReceived.StartsWith("getGenresForHome"))
+                    {
+                        SendMessage("genresForHome:" + string.Join("," , Genres));
+                    }
+                    if(messageReceived.StartsWith("GetGenres"))
+                    {
+                        SendMessage("Genres:" + string.Join(",", Genres));
+                    }
+                    if(messageReceived.StartsWith("Filter:"))
+                    {
+                         string filter = messageReceived.Remove(0, 7);
+                         SendMessage("BooksToPreview:" + DataHandler.GetFilter(filter));
+                    }
+
+
+                    if(messageReceived.StartsWith("AddReadBook:"))
+                    {
+                        string bookName = messageReceived.Remove(0, 12);
+                        string Readlist = DataHandler.GetReadlist(user);
+
+                        if(Readlist == "") 
+                        {
+                            Readlist = bookName;
+                        }
+                        else if (!CheckForString(Readlist, bookName))
+                        {
+                            Readlist += ',' + bookName;
+                        }
+                        DataHandler.UpdateReadlist(user, Readlist);
+                    }
+                    if (messageReceived.StartsWith("AddWishBook:"))
+                    {
+                        string bookName = messageReceived.Remove(0, 12);
+                        string Wishlist = DataHandler.GetWishlist(user);
+
+                        if (Wishlist == "")
+                        {
+                            Wishlist = bookName;
+                        }
+                        else if (!CheckForString(Wishlist, bookName))
+                        {
+                            Wishlist += ',' + bookName;
+                        }
+                        DataHandler.UpdateWishlist(user, Wishlist);
+                    }
+                    if(messageReceived.StartsWith("SearchQuery:"))
+                    {
+                        string Query = messageReceived.Remove(0, 12);
+                        string[] AllBooks = DataHandler.GetAll().Split('@');
+                        string BooksToSend = "";
+                        foreach(string Book in AllBooks) 
+                        {
+                            if (Query.Contains(Book) || Book.Contains(Query)) 
+                            {
+                                BooksToSend += '@' + Book; 
+                            }
+                        }
+                        BooksToSend = BooksToSend.Remove(0, 1);
+                        SendMessage("BooksToPreview:" + BooksToSend);
+                    }
+                    if(messageReceived.StartsWith("RateForBook:"))
+                    {
+                        messageReceived = messageReceived.Remove(0, 12);
+                        string[] strings = messageReceived.Split(',');
+                        string bookName = strings[0];
+                        float rateToAdd = float.Parse(strings[1]);
+
+                        float rate = float.Parse(DataHandler.GetBooksRating(bookName));
+                        float floatedRatingNumber = float.Parse(DataHandler.GetBooksRatingCount(bookName));
+
+                        rate = (rate *  Math.Abs(floatedRatingNumber- 1)) + rateToAdd;
+                        rate = rate / (floatedRatingNumber);
+
+                        DataHandler.UpdateRate(bookName, rate.ToString());
+                        DataHandler.UpdateRateNum(bookName, (float.Parse(DataHandler.GetBooksRatingCount(bookName)) +1).ToString());
+                    }
+
 
                     lock (_client.GetStream())
                     {
-                        // continue reading form the client
-                        _client.GetStream().BeginRead(data, 0, System.Convert.ToInt32(_client.ReceiveBufferSize), ReceiveMessage, null);
+                            // continue reading form the client
+                            _client.GetStream().BeginRead(data, 0, System.Convert.ToInt32(_client.ReceiveBufferSize), ReceiveMessage, null);
                     }
                 }
             }
@@ -420,13 +549,31 @@ namespace VlibraryServer
             string OriginalSentence = sentences[random.Next(sentences.Length)];
             string modifiedSentence = OriginalSentence;
             int i = 0;
-            while (i < 12/* || modifiedSentence == returnSentence*/)
+            while (i < 8/* || modifiedSentence == returnSentence*/)
             {
                 KeyValuePair<char, char> randomKeyValuePair = ScrambleLetters.ElementAt(random.Next(0, ScrambleLetters.Count));
                 modifiedSentence = modifiedSentence.Replace(randomKeyValuePair.Key, randomKeyValuePair.Value);
                 i++;
             }
             return new string[] { modifiedSentence, OriginalSentence };
+        }
+
+        /// <summary>
+        /// Receives a string in "string1, string2, ..., ..." format, and a string to check for.
+        /// </summary>
+        /// <param name="text"></param>
+        /// <returns>
+        /// Returns true if the string is within the long string.
+        /// </returns>
+        public bool CheckForString(string stringChain, string StringToCheckFor)
+        {
+            string[] ChainArray = stringChain.Split(',');
+            foreach (string s in ChainArray) 
+            {
+                if (s.Equals(StringToCheckFor))
+                    {  return true; }
+            }
+            return false;
         }
     }
 }

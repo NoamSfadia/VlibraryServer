@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -28,7 +29,7 @@ namespace VlibraryServer
         /// Represents the connection string used to connect to the SQL Server database
         /// (represents the database location)
         /// </summary>
-        static string connectionString = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=""C:\Users\Noam Sfadia\source\repos\VlibraryServer\VlibraryServer\UserDatabase.mdf"";Integrated Security=True";
+        static string connectionString = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\Users\User\Source\Repos\VlibraryServer\VlibraryServer\UserDatabase.mdf;Integrated Security=True";
 
         /// <summary>
         /// Represents a connection object to a SQL Server database
@@ -63,6 +64,7 @@ namespace VlibraryServer
 
                 cmd.CommandText = sql;
 
+                cmd.Parameters.Clear();
                 cmd.Parameters.AddWithValue("@Username", Username);
                 cmd.Parameters.AddWithValue("@Password", Password);
                 cmd.Parameters.AddWithValue("@Mail", Mail);
@@ -112,12 +114,20 @@ namespace VlibraryServer
 
 
                 cmd.Connection = connection;
-                string sql = "SELECT COUNT(*) FROM UserDetails WHERE [User] = '" + Username + "' AND [Password] = '" + Password + "'";
+                string sql = "SELECT COUNT(*) FROM UserDetails WHERE [User] = @USERNAME AND [Password] = @PASSWORD";
+
 
                 cmd.CommandText = sql;
-                connection.Open();
+                cmd.Parameters.Clear();
+                cmd.Parameters.AddWithValue("@USERNAME", Username);
+                cmd.Parameters.AddWithValue("@PASSWORD", Password);
+
+                if (connection.State == System.Data.ConnectionState.Closed) 
+                {
+                    connection.Open();
+                }
+
                 int c = (int)cmd.ExecuteScalar();
-                connection.Close();
                 if (c > 0)
                     return true;
                 else
@@ -127,6 +137,13 @@ namespace VlibraryServer
             {
                 Console.WriteLine(ex.Message);
                 return false;
+            }
+            finally
+            {
+                if(connection.State == System.Data.ConnectionState.Open) 
+                {
+                    connection.Close();
+                }
             }
         }
         /// <summary>
@@ -190,27 +207,72 @@ namespace VlibraryServer
         {
             try
             {
+                string mailAddress = "";
+
                 cmd.Connection = connection;
-                string sql = "SELECT Mail FROM UserDetails WHERE User = '" + Username + "'";
+                string sql = "SELECT Mail FROM UserDetails WHERE [User] = '" + Username + "'";
+
                 cmd.CommandText = sql;
-                connection.Open();
-
-                object result = cmd.ExecuteScalar();
-                string emailAddress = "";
-                // Check if a result was found
-                if (result != null && result != DBNull.Value)
+                if(connection.State == System.Data.ConnectionState.Closed) 
                 {
-                    emailAddress = (string)result;
+                    connection.Open();
                 }
-                connection.Close();
-                return emailAddress;
-
+                object result = (string)cmd.ExecuteScalar();
+                
+                
+                if(result != null) 
+                {
+                    mailAddress = (string)result;
+                }
+                return mailAddress;
             }
             catch (Exception ex)
             {
-
                 Console.WriteLine(ex.Message);
                 return "";
+            }
+            finally 
+            {
+                if (connection.State == System.Data.ConnectionState.Open)
+                {
+                    connection.Close();
+                }
+            }
+        }
+        public static string GetUserDetails(string Username)
+        {
+            try
+            {
+                string mailAddress = "";
+
+                cmd.Connection = connection;
+                string sql = "SELECT * FROM UserDetails";
+
+                cmd.CommandText = sql;
+                if (connection.State == System.Data.ConnectionState.Closed)
+                {
+                    connection.Open();
+                }
+                object result = (string)cmd.ExecuteScalar();
+
+
+                if (result != null)
+                {
+                    mailAddress = (string)result;
+                }
+                return mailAddress;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return "";
+            }
+            finally
+            {
+                if (connection.State == System.Data.ConnectionState.Open)
+                {
+                    connection.Close();
+                }
             }
         }
         /// <summary>
@@ -233,6 +295,7 @@ namespace VlibraryServer
 
                     using (SqlCommand command = new SqlCommand(query, connection))
                     {
+                        command.Parameters.Clear();
                         // Set the parameters for the query.
                         command.Parameters.AddWithValue("@NewPassword", newPassword);
                         command.Parameters.AddWithValue("@Mail", mail);
@@ -268,12 +331,13 @@ namespace VlibraryServer
                     newPassword = CreateMD5Hash(newPassword);
 
                     // Define the SQL update query.
-                    string query = "UPDATE UserDetails SET Password = @NewPassword WHERE User = @User";
+                    string query = "UPDATE UserDetails SET Password = @newPassword WHERE User = @User";
 
                     using (SqlCommand command = new SqlCommand(query, connection))
                     {
+                        command.Parameters.Clear();
                         // Set the parameters for the query.
-                        command.Parameters.AddWithValue("@NewPassword", newPassword);
+                        command.Parameters.AddWithValue("newPassword", newPassword);
                         command.Parameters.AddWithValue("@User", username);
 
                         // Execute the update query.
@@ -297,7 +361,7 @@ namespace VlibraryServer
         /// <param name="CurrentUsername"></param>
         /// <param name="newUsername"></param>
         /// <returns></returns>
-        public static bool UpdateUsername(string CurrentUsername,string newUsername)
+        public static bool UpdateUsername(string Mail,string newUsername)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
@@ -306,13 +370,14 @@ namespace VlibraryServer
                     connection.Open();
 
                     // Define the SQL update query.
-                    string query = "UPDATE UserDetails SET [User] = @NewUsername WHERE [User] = @Username";
+                    string query = "UPDATE UserDetails SET [User] = @Username WHERE [Mail] = @mail";
 
                     using (SqlCommand command = new SqlCommand(query, connection))
                     {
+                        command.Parameters.Clear();
                         // Set the parameters for the query.
-                        command.Parameters.AddWithValue("@NewUsername", newUsername);
-                        command.Parameters.AddWithValue("@Username", CurrentUsername);
+                        command.Parameters.AddWithValue("@Username", newUsername);
+                        command.Parameters.AddWithValue("@mail", Mail);
 
                         // Execute the update query.
                         int rowsAffected = command.ExecuteNonQuery();
@@ -348,6 +413,7 @@ namespace VlibraryServer
 
                     using (SqlCommand command = new SqlCommand(query, connection))
                     {
+                        command.Parameters.Clear();
                         // Set the parameters for the query.
                         command.Parameters.AddWithValue("@NewMail", newMail);
                         command.Parameters.AddWithValue("@Username", Username);
@@ -371,55 +437,79 @@ namespace VlibraryServer
         {
             try
             {
+                string type = "";
+
                 cmd.Connection = connection;
-                string sql = "SELECT Type FROM UserDetails WHERE User = @Username";
-                cmd.Parameters.AddWithValue("@Username", Username);
+                string sql = "SELECT Type FROM UserDetails WHERE [User] = '" + Username + "'";
+
                 cmd.CommandText = sql;
-                connection.Open();
-
-                object result = cmd.ExecuteScalar();
-                string UserType = "";
-                // Check if a result was found
-                if (result != null && result != DBNull.Value)
+                if(connection.State == System.Data.ConnectionState.Closed) 
                 {
-                   UserType  = (string)result;
+                    connection.Open();
                 }
-                connection.Close();
-                return UserType;
+                object result = (string)cmd.ExecuteScalar();
 
+                if (result != null)
+                {
+                    type = (string)result;
+                }
+                return type;
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
                 return "";
             }
+            finally 
+            {
+                if(connection.State == System.Data.ConnectionState.Open) 
+                {
+                    connection.Close();
+                }
+            }
         }
         public static int InsertBook(string bookdetails)
         {
             try
             {
-                string[] data = bookdetails.Split(',');
+                string[] data = bookdetails.Split('@');
                 BookName = data[0];
                 Author = data[1];
                 Genre = data[2];
-                Rating = data[3];
-                
+                Summary = data[3];
+                Image = data[4]; //Image Here In Base64
+
+                string ImageBookResourcesFolderPath = @"C:\Users\User\source\repos\VlibraryServer\VlibraryServer\ImageBookResources\";
+                try 
+                {
+                    string filePath = Path.Combine(ImageBookResourcesFolderPath, BookName + "_Image");
+                    byte[] bytes = Convert.FromBase64String(Image);
+                    File.WriteAllBytes(filePath, bytes);
+                }
+                catch (Exception ex) 
+                {
+                    Console.WriteLine(ex.Message.ToString());
+                }
+
 
 
                 cmd.Connection = connection;
 
-                string sql = "INSERT INTO BookDetails ([Name], Author, Genre, Rate) VALUES (@name, @author, @genre, @rate)";
+                string sql = "INSERT INTO BookDetails ([Name], Author, Genre, Summary) VALUES (@BookName, @author, @genre, @summary)";
 
                 cmd.CommandText = sql;
 
-                cmd.Parameters.AddWithValue("@name", BookName);
+                cmd.Parameters.Clear();
+                cmd.Parameters.AddWithValue("@BookName", BookName);
                 cmd.Parameters.AddWithValue("@author", Author);
                 cmd.Parameters.AddWithValue("@genre", Genre);
-                cmd.Parameters.AddWithValue("@rate", Rating);
+                cmd.Parameters.AddWithValue("@summary", Summary);
 
-                connection.Open();
+                if(connection.State == System.Data.ConnectionState.Closed) 
+                {
+                    connection.Open();
+                }
                 int x = cmd.ExecuteNonQuery();
-                connection.Close();
                 return x;
             }
             catch (Exception ex)
@@ -428,14 +518,22 @@ namespace VlibraryServer
                 Console.WriteLine("-" + ex.Message);
                 return 0;
             }
+            finally
+            {
+                if(connection.State == System.Data.ConnectionState.Open) 
+                {
+                    connection.Close();
+                    
+                }
+            }
         }
         public static string GetBooksAuthor(string BookName)
         {
             try
             {
                 cmd.Connection = connection;
-                string sql = "SELECT Author FROM BookDetails WHERE Name = @name";
-                cmd.Parameters.AddWithValue("@name", BookName);
+                string sql = "SELECT Author FROM BookDetails WHERE Name = @Name";
+                cmd.Parameters.AddWithValue("@Name", BookName);
                 cmd.CommandText = sql;
                 connection.Open();
 
@@ -461,11 +559,11 @@ namespace VlibraryServer
             try
             {
                 cmd.Connection = connection;
-                string sql = "SELECT Genre FROM BookDetails WHERE Name = @name";
-                cmd.Parameters.AddWithValue("@name", BookName);
+                string sql = "SELECT Genre FROM BookDetails WHERE Name = @book";
+                cmd.Parameters.AddWithValue("@book", BookName);
                 cmd.CommandText = sql;
                 connection.Open();
-
+                
                 object result = cmd.ExecuteScalar();
                 string UserType = "";
                 // Check if a result was found
@@ -488,8 +586,9 @@ namespace VlibraryServer
             try
             {
                 cmd.Connection = connection;
-                string sql = "SELECT Rate FROM BookDetails WHERE Name = @name";
-                cmd.Parameters.AddWithValue("@name", BookName);
+                cmd.Parameters.Clear();
+                string sql = "SELECT Rate FROM BookDetails WHERE Name = @BookName";
+                cmd.Parameters.AddWithValue("@BookName", BookName);
                 cmd.CommandText = sql;
                 connection.Open();
 
@@ -510,5 +609,329 @@ namespace VlibraryServer
                 return "";
             }
         }
+        public static string GetBooksRatingCount(string BookName)
+        {
+            try
+            {
+                cmd.Connection = connection;
+                cmd.Parameters.Clear();
+                string sql = "SELECT RateNum FROM BookDetails WHERE Name = @BookName";
+                cmd.Parameters.AddWithValue("@BookName", BookName);
+                cmd.CommandText = sql;
+                connection.Open();
+
+                object result = cmd.ExecuteScalar();
+                string UserType = "";
+                // Check if a result was found
+                if (result != null && result != DBNull.Value)
+                {
+                    UserType = (string)result;
+                }
+                connection.Close();
+                return UserType;
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return "";
+            }
+        }
+        public static string GetAll()
+        {
+            string AllBooks = "";
+            try
+            {
+                cmd.Connection = connection;
+                string sql = "SELECT Name,Author,Genre,Rate,Summary FROM BookDetails";
+                cmd.CommandText = sql;
+                connection.Open();
+
+                using(SqlDataReader reader = cmd.ExecuteReader()) 
+                { 
+                    while (reader.Read()) 
+                    {
+                        string name = reader["Name"].ToString();
+                        string Author = reader["Author"].ToString();
+                        string Genre = reader["Genre"].ToString();
+                        string Rate = reader["Rate"].ToString();
+                        string Summary = reader["Summary"].ToString();
+
+                        string filePath = Path.Combine(@"C:\Users\User\source\repos\VlibraryServer\VlibraryServer\ImageBookResources\", name + "_Image");
+                        byte[] bytes = File.ReadAllBytes(filePath);
+                        string Image = Convert.ToBase64String(bytes);
+
+                        
+
+                        string bookDetails = name + "$" + Author + "$" + Genre + "$" + Rate + "$" + Summary + "$" + Image;
+                        AllBooks += bookDetails + "@";
+                    }
+                }
+                connection.Close();
+            }
+            
+            catch (Exception ex) 
+            {
+                Console.WriteLine(ex.Message.ToString());
+            }
+            return AllBooks.Substring(0,AllBooks.Length - 1);
+            
+        }
+        public static string GetFilter(string filter)
+        {
+            string AllBooks = "";
+            try
+            {
+                cmd.Connection = connection;
+                
+                string sql = "SELECT Name,Author,Genre,Rate,Summary FROM BookDetails WHERE Genre = @genre";
+
+                cmd.Parameters.Clear();
+                cmd.Parameters.AddWithValue("@genre", filter);
+
+                cmd.CommandText = sql;
+                connection.Open();
+
+                using (SqlDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string name = reader["Name"].ToString();
+                        string Author = reader["Author"].ToString();
+                        string Genre = reader["Genre"].ToString();
+                        string Rate = reader["Rate"].ToString();
+                        string Summary = reader["Summary"].ToString();
+
+                        string filePath = Path.Combine(@"C:\Users\User\source\repos\VlibraryServer\VlibraryServer\ImageBookResources\", name + "_Image");
+                        byte[] bytes = File.ReadAllBytes(filePath);
+                        string Image = Convert.ToBase64String(bytes);
+
+
+
+                        string bookDetails = name + "$" + Author + "$" + Genre + "$" + Rate + "$" + Summary + "$" + Image;
+                        AllBooks += bookDetails + "@";
+                    }
+                }
+                connection.Close();
+                
+            }
+
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message.ToString());
+            }
+            if (AllBooks == "")
+            {
+                return "None";
+            }
+            else
+            {
+                return AllBooks.Substring(0, AllBooks.Length - 1);
+            }
+        }
+        public static string GetReadlist(string Username)
+        
+        {
+            try
+            {
+                string type = "";
+
+                cmd.Connection = connection;
+                string sql = "SELECT Readlist FROM UserDetails WHERE [User] = '" + Username + "'";
+
+                cmd.CommandText = sql;
+                if (connection.State == System.Data.ConnectionState.Closed)
+                {
+                    connection.Open();
+                }
+                object result = (string)cmd.ExecuteScalar();
+
+                if (result != null)
+                {
+                    type = (string)result;
+                }
+                return type;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return "";
+            }
+            finally
+            {
+                if (connection.State == System.Data.ConnectionState.Open)
+                {
+                    connection.Close();
+                }
+            }
+        }
+        public static string GetWishlist(string Username)
+        {
+            try
+            {
+                string type = "";
+
+                cmd.Connection = connection;
+                string sql = "SELECT Wishlist FROM UserDetails WHERE [User] = '" + Username + "'";
+
+                cmd.CommandText = sql;
+                if (connection.State == System.Data.ConnectionState.Closed)
+                {
+                    connection.Open();
+                }
+                object result = (string)cmd.ExecuteScalar();
+
+                if (result != null)
+                {
+                    type = (string)result;
+                }
+                return type;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return "";
+            }
+            finally
+            {
+                if (connection.State == System.Data.ConnectionState.Open)
+                {
+                    connection.Close();
+                }
+            }
+        }
+        public static bool UpdateReadlist(string username, string readlist)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+
+                    // Define the SQL update query.
+                    string query = "UPDATE UserDetails SET [Readlist] = @Readlist WHERE [User] = @Username";
+
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.Clear();
+                        // Set the parameters for the query.
+                        command.Parameters.AddWithValue("@Username", username);
+                        command.Parameters.AddWithValue("@Readlist", readlist);
+
+                        // Execute the update query.
+                        int rowsAffected = command.ExecuteNonQuery();
+
+                        // Check if any rows were affected. If > 0, the update was successful.
+                        return rowsAffected > 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions that may occur during the database operation.
+                    Console.WriteLine("Error: " + ex.Message);
+                    return false;
+                }
+            }
+        }
+        public static bool UpdateWishlist(string username, string wishlist)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+
+                    // Define the SQL update query.
+                    string query = "UPDATE UserDetails SET [Wishlist] = @Wishlist WHERE [User] = @Username";
+
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.Clear();
+                        // Set the parameters for the query.
+                        command.Parameters.AddWithValue("@Username", username);
+                        command.Parameters.AddWithValue("@Wishlist", wishlist);
+
+                        // Execute the update query.
+                        int rowsAffected = command.ExecuteNonQuery();
+
+                        // Check if any rows were affected. If > 0, the update was successful.
+                        return rowsAffected > 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions that may occur during the database operation.
+                    Console.WriteLine("Error: " + ex.Message);
+                    return false;
+                }
+            }
+        }
+        public static bool UpdateRate(string book, string Rate)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+
+                    // Define the SQL update query.
+                    string query = "UPDATE BookDetails SET [Rate] = @Rate WHERE [Name] = @BookName";
+
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.Clear();
+                        // Set the parameters for the query.
+                        command.Parameters.AddWithValue("@BookName", book);
+                        command.Parameters.AddWithValue("@Rate", Rate);
+
+                        // Execute the update query.
+                        int rowsAffected = command.ExecuteNonQuery();
+
+                        // Check if any rows were affected. If > 0, the update was successful.
+                        return rowsAffected > 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions that may occur during the database operation.
+                    Console.WriteLine("Error: " + ex.Message);
+                    return false;
+                }
+            }
+        }
+        public static bool UpdateRateNum(string book, string RateNum)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+
+                    // Define the SQL update query.
+                    string query = "UPDATE BookDetails SET [RateNum] = @Rate WHERE [Name] = @BookName";
+
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.Clear();
+                        // Set the parameters for the query.
+                        command.Parameters.AddWithValue("@BookName", book);
+                        command.Parameters.AddWithValue("@Rate", RateNum);
+
+                        // Execute the update query.
+                        int rowsAffected = command.ExecuteNonQuery();
+
+                        // Check if any rows were affected. If > 0, the update was successful.
+                        return rowsAffected > 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions that may occur during the database operation.
+                    Console.WriteLine("Error: " + ex.Message);
+                    return false;
+                }
+            }
+        }
+
     }
 }

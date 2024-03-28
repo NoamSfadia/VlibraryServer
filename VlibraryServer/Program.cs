@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace VlibraryServer
@@ -30,11 +31,18 @@ namespace VlibraryServer
             {
                 // AcceptTcpClient - Blocking call
                 // Execute will not continue until a connection is established
-
-                // We create an instance of ChatClient so the server will be able to 
+                TcpClient tcp = listener.AcceptTcpClient();
+                // We create an instance of Client so the server will be able to 
                 // server multiple client at the same time.
-                Client user = new Client(listener.AcceptTcpClient());
+                Thread thread = new Thread(() => NewClient(tcp));
+                thread.Start();
+                
             }
+
+        }
+        static void NewClient(TcpClient TcpClient) 
+        {
+            Client user = new Client(TcpClient);
         }
     }
     

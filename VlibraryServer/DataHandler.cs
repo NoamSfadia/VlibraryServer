@@ -820,10 +820,11 @@ namespace VlibraryServer
 
                         // Execute the update query.
                         int rowsAffected = command.ExecuteNonQuery();
-
+                        connection.Close();
                         // Check if any rows were affected. If > 0, the update was successful.
                         return rowsAffected > 0;
                     }
+
                 }
                 catch (Exception ex)
                 {
@@ -853,7 +854,7 @@ namespace VlibraryServer
 
                         // Execute the update query.
                         int rowsAffected = command.ExecuteNonQuery();
-
+                        connection.Close ();
                         // Check if any rows were affected. If > 0, the update was successful.
                         return rowsAffected > 0;
                     }
@@ -886,7 +887,7 @@ namespace VlibraryServer
 
                         // Execute the update query.
                         int rowsAffected = command.ExecuteNonQuery();
-
+                        connection.Close();
                         // Check if any rows were affected. If > 0, the update was successful.
                         return rowsAffected > 0;
                     }
@@ -919,7 +920,7 @@ namespace VlibraryServer
 
                         // Execute the update query.
                         int rowsAffected = command.ExecuteNonQuery();
-
+                        connection.Close ();
                         // Check if any rows were affected. If > 0, the update was successful.
                         return rowsAffected > 0;
                     }

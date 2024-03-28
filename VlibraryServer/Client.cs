@@ -330,7 +330,12 @@ namespace VlibraryServer
                     {
                             SendMessage("Valid Code");
                     }
-                    
+
+
+                    if(messageReceived == "Disconnection In proccess")
+                    {
+                        AllClients.Remove(_clientIP);
+                    }
 
                     
 
@@ -470,8 +475,9 @@ namespace VlibraryServer
                         rate = (rate *  Math.Abs(floatedRatingNumber- 1)) + rateToAdd;
                         rate = rate / (floatedRatingNumber);
 
-                        DataHandler.UpdateRate(bookName, rate.ToString());
+                        DataHandler.UpdateRate(bookName, rate.ToString("F2"));
                         DataHandler.UpdateRateNum(bookName, (float.Parse(DataHandler.GetBooksRatingCount(bookName)) +1).ToString());
+                        SendMessage("SuccesfulRating");
                     }
 
 

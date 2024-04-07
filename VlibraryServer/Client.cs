@@ -381,7 +381,11 @@ namespace VlibraryServer
                         SendMessage("UserType:" + UserType);
                         Console.WriteLine(UserType);
                     }
-
+                    if(messageReceived.StartsWith("WhatTypeOrder"))
+                    {
+                        string UserType = DataHandler.GetUserType(user);
+                        SendMessage("UserTypeOrder:" + UserType);
+                    }
                     if (messageReceived.StartsWith("GetUserName"))
                     {
                         SendMessage("UserName:" + user);
@@ -478,6 +482,167 @@ namespace VlibraryServer
                         DataHandler.UpdateRate(bookName, rate.ToString("F2"));
                         DataHandler.UpdateRateNum(bookName, (float.Parse(DataHandler.GetBooksRatingCount(bookName)) +1).ToString());
                         SendMessage("SuccesfulRating");
+                    }
+                    if(messageReceived.StartsWith("WhatLibraryOrderCurrentQuantity"))
+                    {
+                        string bookName = messageReceived.Remove(0, 31);
+                        string Library = DataHandler.GetUserLibrary(user);
+                        
+                        //need to check if library exists.
+                        if(!CheckForString(DataHandler.GetAllLibraries(), Library))
+                        {
+                            DataHandler.InsertLibrary(Library);
+                        }
+                        string bookAndQuantity = DataHandler.GetBooksAndQuantity(Library);
+                        if(!bookAndQuantity.Equals("NoBooks/0"))
+                        {
+                           bookAndQuantity = CheckForStringDouble(DataHandler.GetBooksAndQuantity(Library), bookName);
+                           if(bookAndQuantity == "") // if book doesn't exist.
+                           {
+                                string books = DataHandler.GetBooksAndQuantity(Library);
+                                books += bookName + "/0" + ',';
+                                DataHandler.UpdateBooksQuantity(Library, books);
+                           }
+                            bookAndQuantity = CheckForStringDouble(DataHandler.GetBooksAndQuantity(Library), bookName);
+
+                        }
+                        else //if defualt value
+                        {
+                            DataHandler.UpdateBooksQuantity(Library, bookName + "/0" +',');
+                        }
+                        SendMessage("OrderLibrary:" +  Library + ',' + bookAndQuantity);
+                    }
+                    if(messageReceived.StartsWith("Quantity:"))
+                    {
+                        string[] libraryAndQuantity = messageReceived.Remove(0, 9).Split(',');
+                        string Quantity = libraryAndQuantity[0];
+                        string libraryName = libraryAndQuantity[1];
+                        string AllLibraries = DataHandler.GetAllLibraries();
+                        
+                        if(!CheckForString(AllLibraries, libraryName)) //if library doesnt exist.
+                        {
+                            DataHandler.InsertLibrary(libraryName);
+                            DataHandler.UpdateBooksQuantity(libraryName, Quantity + ',');
+
+                            //checks if the book is in the order list
+
+                            string[] bookAndQuantity = Quantity.Split('/');
+                            string[] OrderedBooks = DataHandler.GetOrders(libraryName).Split(',');
+                            bool isInOrderList = false;
+                            foreach(string bookOrder in OrderedBooks) 
+                            {
+                                string[] bookOrderedSpiltted = bookOrder.Split('/');
+                                if (bookOrderedSpiltted[0].Equals(bookAndQuantity[0]))
+                                {
+                                    isInOrderList = true;
+                                }
+                            }
+                            if(!isInOrderList) 
+                            {
+                                DataHandler.UpdateOrders(libraryName, bookAndQuantity[0] + "/0" + ','); //inserts the book in the order list.
+                            } 
+                        }
+                        else //update quantity
+                        {
+                            string books = DataHandler.GetBooksAndQuantity(libraryName);
+                            string[] booksQuantity = books.Substring(0, books.Length - 1).Split(',');
+                            foreach(string bookQuantity in booksQuantity)
+                            {
+                                string[] strings = bookQuantity.Split('/');
+                                string bookName = strings[0];
+                                string Quantitys = strings[1];
+
+                                if (Quantity.StartsWith(bookName) && Quantitys.Equals("0"))
+                                {
+                                    books = books.Replace(bookQuantity, Quantity);
+                                }
+                            }
+                            DataHandler.UpdateBooksQuantity(libraryName, books);
+                        }
+                        
+
+                    }
+                    if(messageReceived.StartsWith("DemandOrder"))
+                    {
+                        string bookName = messageReceived.Remove(0,11);
+                        string[] AllLibraries = DataHandler.GetAllLibraries().Split(',');
+                        string librariesReturn = "";
+                        foreach(string library in AllLibraries) 
+                        {
+                            string BooksAndQuantity = DataHandler.GetBooksAndQuantity(library);
+                            string Orders = DataHandler.GetOrders(library);
+                            bool isInQuantityList = true;
+
+                            if(Orders.Equals("NoOrdersPlaced/0"))
+                            {
+                                DataHandler.UpdateOrders(library, bookName +"/0");
+                                Orders = DataHandler.GetOrders(library);
+                            }
+                            if(CheckForStringDouble(BooksAndQuantity, bookName) == "")
+                            {
+                                isInQuantityList = false;
+                            }
+                            string BookAndQuantity = CheckForStringDouble(BooksAndQuantity, bookName);
+                            string Order = CheckForStringDouble(Orders, bookName);
+                            if (BookAndQuantity != null && Order != null && isInQuantityList)
+                            {
+                                string[] QuantitySplit = BookAndQuantity.Split('/');
+                                string[] OrderSplit = Order.Split('/');
+
+                                int QuantityCount = int.Parse(QuantitySplit[1]);
+                                int OrdersCount = int.Parse(OrderSplit[1]);
+
+                                if (QuantityCount - OrdersCount > 10)
+                                {
+                                    librariesReturn += library + '/' + "Blue" + ',';
+                                }
+                                else if (QuantityCount - OrdersCount <= 10 && QuantityCount - OrdersCount >= 4)
+                                {
+                                    librariesReturn += library + '/' + "Yellow" + ',';
+                                }
+                                else
+                                {
+                                    librariesReturn += library + '/' + "Red" + ',';
+                                }
+                            }
+                            else
+                            {
+                                librariesReturn += library + '/' + "Green" + ',';
+                            }
+                        }
+                        SendMessage("ReturnDemandOrder" + librariesReturn.Substring(0, librariesReturn.Length - 1));
+                    }
+
+
+                    if(messageReceived.StartsWith("UsersForSettings"))
+                    {
+                        string AllUsers = DataHandler.GetAllUsernames();
+                        SendMessage("UsersForSettings:" + AllUsers);
+                    }
+                    if(messageReceived.StartsWith("TypeUpdate"))
+                    {
+                        if (messageReceived.StartsWith("TypeUpdateLib:"))
+                        {
+                            string[] TypeAndUserLib = messageReceived.Remove(0, 14).Split(',');
+                            string type = TypeAndUserLib[0];
+                            string user = TypeAndUserLib[1];
+                            string library = TypeAndUserLib[2];
+
+                            DataHandler.UpdateType(user, type);
+                            DataHandler.UpdateLibrary(user, library);
+                            SendMessage("Confirmed");
+                        }
+                        else
+                        {
+                            string[] TypeAndUser = messageReceived.Remove(0, 11).Split(',');
+                            string type = TypeAndUser[0];
+                            string username = TypeAndUser[1];
+
+                            DataHandler.UpdateType(username, type);
+                            DataHandler.UpdateLibrary(username, DataHandler.GetUserLibrary(user));
+                            SendMessage("Confirmed");
+                        }
+                        
                     }
 
 
@@ -580,6 +745,24 @@ namespace VlibraryServer
                     {  return true; }
             }
             return false;
+        }
+        /// <summary>
+        /// Receives a string in "string1, string2, ..., ..." format, and a string to check for. use for string/string format.
+        /// </summary>
+        /// <param name="stringChain"></param>
+        /// <param name="StringToCheckFor"></param>
+        /// <returns>
+        /// the string
+        /// </returns>
+        public string CheckForStringDouble(string stringChain, string StringToCheckFor)
+        {
+            string[] ChainArray = stringChain.Split(',');
+            foreach (string s in ChainArray)
+            {
+                if (s.StartsWith(StringToCheckFor))
+                { return s; }
+            }
+            return "";
         }
     }
 }

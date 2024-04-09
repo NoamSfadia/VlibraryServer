@@ -1016,6 +1016,12 @@ namespace VlibraryServer
                 }
             }
         }
+        /// <summary>
+        /// Updates the rate number for book details.
+        /// </summary>
+        /// <param name="book"></param>
+        /// <param name="RateNum"></param>
+        /// <returns></returns>
         public static bool UpdateRateNum(string book, string RateNum)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
@@ -1049,6 +1055,10 @@ namespace VlibraryServer
                 }
             }
         }
+        /// <summary>
+        /// Returns all the libraries in LibraryDetails.
+        /// </summary>
+        /// <returns></returns>
         public static string GetAllLibraries()
         {
             string AllLibraries = "";
@@ -1200,6 +1210,11 @@ namespace VlibraryServer
                 }
             }
         }
+        /// <summary>
+        /// Returns Orders from LibraryDetalis.
+        /// </summary>
+        /// <param name="Library"></param>
+        /// <returns></returns>
         public static string GetOrders(string Library)
         {
             try
@@ -1235,6 +1250,12 @@ namespace VlibraryServer
                 }
             }
         }
+        /// <summary>
+        /// Update Orders in LibraryDetails.
+        /// </summary>
+        /// <param name="library"></param>
+        /// <param name="Orders"></param>
+        /// <returns></returns>
         public static bool UpdateOrders(string library, string Orders)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
@@ -1265,6 +1286,80 @@ namespace VlibraryServer
                     // Handle any exceptions that may occur during the database operation.
                     Console.WriteLine("Error: " + ex.Message);
                     return false;
+                }
+            }
+        }
+        /// <summary>
+        /// Updates the Order in UserDetails.
+        /// </summary>
+        /// <param name="User"></param>
+        /// <param name="Order"></param>
+        /// <returns></returns>
+        public static bool UpdateOrdersForUser(string User, string Order)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+
+                    // Define the SQL update query.
+                    string query = "UPDATE UserDetails SET [Order] = @Order WHERE [User] = @username";
+
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.Clear();
+                        // Set the parameters for the query.
+                        command.Parameters.AddWithValue("@username", User);
+                        command.Parameters.AddWithValue("@Order", Order);
+
+                        // Execute the update query.
+                        int rowsAffected = command.ExecuteNonQuery();
+                        connection.Close();
+                        // Check if any rows were affected. If > 0, the update was successful.
+                        return rowsAffected > 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions that may occur during the database operation.
+                    Console.WriteLine("Error: " + ex.Message);
+                    return false;
+                }
+            }
+        }
+        public static string GetOrderUser(string user)
+        {
+            try
+            {
+                string type = "";
+
+                cmd.Connection = connection;
+                string sql = "SELECT [Order] FROM UserDetails WHERE [User] = '" + user + "'";
+
+                cmd.CommandText = sql;
+                if (connection.State == System.Data.ConnectionState.Closed)
+                {
+                    connection.Open();
+                }
+                object result = (string)cmd.ExecuteScalar();
+
+                if (result != null)
+                {
+                    type = (string)result;
+                }
+                return type;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return "";
+            }
+            finally
+            {
+                if (connection.State == System.Data.ConnectionState.Open)
+                {
+                    connection.Close();
                 }
             }
         }

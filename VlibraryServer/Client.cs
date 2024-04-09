@@ -12,6 +12,8 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.CodeDom.Compiler;
+using System.Runtime.CompilerServices;
+using System.Xml.Linq;
 
 
 namespace VlibraryServer
@@ -503,6 +505,13 @@ namespace VlibraryServer
                                 books += bookName + "/0" + ',';
                                 DataHandler.UpdateBooksQuantity(Library, books);
                            }
+                           if (CheckForStringDouble(DataHandler.GetOrders(Library), bookName) == "") // if book doesn't exist in orders.
+                           {
+                                string books = DataHandler.GetOrders(Library);
+                                books += bookName + "/0" + ',';
+                                DataHandler.UpdateOrders(Library, books);
+                           }
+
                             bookAndQuantity = CheckForStringDouble(DataHandler.GetBooksAndQuantity(Library), bookName);
 
                         }
@@ -552,7 +561,7 @@ namespace VlibraryServer
                                 string bookName = strings[0];
                                 string Quantitys = strings[1];
 
-                                if (Quantity.StartsWith(bookName) && Quantitys.Equals("0"))
+                                if (Quantity.StartsWith(bookName))
                                 {
                                     books = books.Replace(bookQuantity, Quantity);
                                 }
@@ -642,6 +651,58 @@ namespace VlibraryServer
                             DataHandler.UpdateLibrary(username, DataHandler.GetUserLibrary(user));
                             SendMessage("Confirmed");
                         }
+                    }
+                    if(messageReceived.StartsWith("PlaceOrder"))
+                    {
+                        //setting the book order count by 1.
+                        string[] bookAndLibrary = messageReceived.Remove(0, 10).Split(',');
+                        string book = bookAndLibrary[0];
+                        string library = bookAndLibrary[1];
+                        string DemandLevel = bookAndLibrary[2];
+
+                        string order = CheckForStringDouble(DataHandler.GetOrders(library), book);
+                        string[] orders = order.Split('/');
+                        string OrderQuantity = book + '/' + (int.Parse(orders[1]) + 1);
+
+                        DataHandler.UpdateOrders(library, DataHandler.GetOrders(library).Replace(order, OrderQuantity));
+
+                        string bookAndQuantity = CheckForStringDouble(DataHandler.GetBooksAndQuantity(library), book);
+                        string[] Quantitys = bookAndQuantity.Split('/');
+                        string Quantity = book + '/' + (int.Parse(Quantitys[1]) -1);
+
+                        DataHandler.UpdateBooksQuantity(library, DataHandler.GetBooksAndQuantity(library).Replace(bookAndQuantity, Quantity));
+                        
+                        //update user details and send confirmation mail.
+                        string date = ""; //date to return.
+                        if(DemandLevel.Equals("Blue"))
+                        {
+                            date = DateTime.Now.AddDays(30).ToString("dd/MM/yy");
+                        }
+                        else if(DemandLevel.Equals("Gold"))
+                        {
+                            date = DateTime.Now.AddDays(15).ToString("dd/MM/yy");
+                        }
+                        else if (DemandLevel.Equals("Red"))
+                        {
+                            date = DateTime.Now.AddDays(7).ToString("dd/MM/yy");
+                        }
+                        else { date = DateTime.Now.ToString("dd/MM/yy"); }
+
+                        DataHandler.UpdateOrdersForUser(user, book + ',' +  date);
+                        SendCustomFromOutlook(DataHandler.GetEmailAddress(user), date, book, user, library);
+
+                    }
+                    if(messageReceived.StartsWith("CurrentlyReading?"))
+                    {
+                        if(!DataHandler.GetOrderUser(user).Equals("No Order")) 
+                        {
+                            string[] orderAndDate = DataHandler.GetOrderUser(user).Split(',');
+                            string order = orderAndDate[0];
+                            string date = orderAndDate[1];
+                            SendMessage("CurrentlyReading" + order + ".You have until " + date + " to read it.");
+                        }
+                        else { SendMessage("CurrentlyReading" + "Nothing"); }
+                        
                         
                     }
 
@@ -686,6 +747,29 @@ namespace VlibraryServer
             Random random = new Random();
             SmtpCode = (random.Next(100000, 999999)).ToString();
             message.Body = "The code is:    " + SmtpCode;
+            message.IsBodyHtml = false;
+
+
+            SmtpClient smtp = new SmtpClient();
+            smtp.Host = "smtp.office365.com";
+            smtp.Port = 587;
+            smtp.Credentials = new NetworkCredential
+                ("VirtualLibrary367@outlook.com", "cihwzvnmtcuycdgp");
+            smtp.EnableSsl = true;
+
+            smtp.Send(message);
+        }
+        /// <summary>
+        /// Send Custom mail to user.
+        /// </summary>
+        /// <param name="email"></param>
+        public void SendCustomFromOutlook(string email, string date, string bookName, string username, string library)
+        {
+            MailMessage message = new MailMessage();
+            message.From = new MailAddress("VirtualLibrary367@outlook.com");
+            message.To.Add(email);
+            message.Subject = "Confirmed Order";
+            message.Body = "Hey, " + username + ".We have confirmed your order to " + bookName + ",From " + library + " library. The book will be yours until " + date + ".Grab it while you can!";
             message.IsBodyHtml = false;
 
 
